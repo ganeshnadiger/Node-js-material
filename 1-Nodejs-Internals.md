@@ -1,6 +1,6 @@
-# Comprehensive Node.js Internals Study Guide: Architecture, V8, and Libuv
+# Comprehensive Node.js Internals: Architecture, V8, and Libuv
 
-This module provides an architectural deep dive into the internal mechanics of Node.js. It is structured into seven distinct sections, designed for a week of rigorous active recall, system analysis, and edge-case engineering study.
+This module provides an architectural deep dive into the internal mechanics of Node.js. It is structured into seven distinct sections of system analysis, and edge-case engineering study.
 
 ---
 
@@ -118,7 +118,6 @@ When executed at the root level of a main script (outside of an I/O context), th
 // main.js
 setTimeout(() => console.log('Timeout'), 0);
 setImmediate(() => console.log('Immediate'));
-
 ```
 
 If the main thread boots up and enters the event loop in less than $1\text{ms}$, the loop time check in the Timers phase sees that the $1\text{ms}$ normalized timeout has not yet elapsed. It skips Timers, hits the Check phase, and outputs `Immediate` first. If the CPU takes slightly longer to initialize, the timer is seen as expired, and `Timeout` prints first. This non-determinism disappears entirely inside an I/O callback, where `setImmediate` is guaranteed to fire first.
@@ -184,7 +183,6 @@ function starve() {
 }
 starve();
 // The event loop freezes permanently. No timers fire, and all network connections timeout.
-
 ```
 
 The application will show 100% CPU utilization on its single main thread, yet it will be entirely unresponsive to incoming HTTP connections. This is because the event loop is physically blocked from reaching the **Poll Phase**.
@@ -306,7 +304,6 @@ setInterval(() => {
     console.log(`Event Loop Latency P99: ${histogram.p99 / 1e6}ms`);
     histogram.reset();
 }, 5000).unref(); // .unref() ensures this timer doesn't keep the process alive
-
 ```
 
 #### Detecting Synchronous Call Stack Blockers
@@ -322,7 +319,6 @@ blockedAt((time, stack) => {
         console.warn(`Execution Stack Trace:\n`, stack.join('\n'));
     }
 });
-
 ```
 
 ---
@@ -331,7 +327,7 @@ blockedAt((time, stack) => {
 
 Test your understanding of these core concepts by working through these scenario-based engineering questions.
 
-### Question 1
+    ### Question 1
 
 An engineering team is building a microservice that aggregates files. They notice that running `fs.readFile` concurrently on 20 files takes significantly longer than running them in groups of 4. Given that these calls are asynchronous, explain why this performance degradation happens. How can you fix it without changing the application code?
 
@@ -339,7 +335,6 @@ When 20 file reads are executed concurrently, 4 files begin processing immediate
 
 ```bash
 export UV_THREADPOOL_SIZE=20
-
 ```
 
 This maps a dedicated background thread to each concurrent file operation.
@@ -362,7 +357,6 @@ fs.readFile(__filename, () => {
     process.nextTick(() => console.log('4: NextTick Hook'));
     Promise.resolve().then(() => console.log('5: Promise Hook'));
 });
-
 ```
 
 #### Step-by-Step Execution Breakdown:
@@ -392,7 +386,6 @@ function parseDataInChunks(largeArray) {
         });
     }, Promise.resolve());
 }
-
 ```
 
 Will this architecture prevent the event loop from blocking and stop API request timeouts? Why or why not?
@@ -402,3 +395,5 @@ While breaking the processing into Promise segments makes it asynchronous from a
 The Node.js runtime drains the entire microtask queue before yielding back to the event loop phases. By linking thousands of compute chunks together via a continuous Promise chain, the execution loop remains trapped inside the microtask processing phase. It will not return control to the libuv event loop until the entire array is processed.
 
 As a result, the **Poll Phase** is completely starved, preventing the event loop from accepting new incoming TCP connections or handling existing network data. The server will become entirely unresponsive. To properly fix this, the chunks must be broken up using a macrotask scheduler like `setImmediate()` to explicitly yield control back to the event loop phases.
+
+---
