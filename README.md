@@ -121,7 +121,7 @@
 * Preventing Information Disclosure via Clean Straces and Internal Metric Masking
 
 ---
-
+<!-- 
 ## Advanced Middleware Mechanics
 
 ### Pipeline Execution Order & Interception
@@ -146,10 +146,10 @@
 * Request Context Deallocation and Resource Teardown Hooks upon Connection Closure
 
 
----
-<!-- 
-## Advanced MongoDB Infrastructure
+--- 
+-->
 
+## [ Advanced MongoDB Infrastructure ](3-MongoDB-Mongoose.md)
 ### Storage Engines & Sharding Topologies
 
 * WiredTiger Storage Engine Architecture: Concurrency, Journaling, and Checkpoints
@@ -166,7 +166,7 @@
 
 ---
 
-## Mongoose ODM
+## [ Mongoose ODM ](3-MongoDB-Mongoose.md#5-mongoose-architecture--lifecycle-mechanics)
 
 ### Schema Compilation & Document Hydration
 
@@ -175,6 +175,7 @@
 * Virtuals Architecture: Dynamic Extraction, Population Boundaries, and Transformation Overrides
 * Mongoose 9.x Schema Composition: Strict Query Injection Guards vs. Discriminators
 
+<!-- 
 ### Hooks & Advanced Transaction Controls
 
 * Pre/Post Middleware Hook Interception: Document vs. Query Scoping Context Bindings

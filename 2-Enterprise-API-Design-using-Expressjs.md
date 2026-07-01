@@ -590,11 +590,105 @@ export const validateSchema = (schema: AnyZodObject) => {
 * **The Pitfall:** **Prototype Injection via Uncontrolled Object Records.** Declaring lax schemas such as `z.record(z.any())` allows clients to send keys like `__proto__`. If these objects are merged deep inside configurations using vulnerable utilities, it can lead to prototype pollution, resulting in remote code execution (RCE) or process failure.
 * **The Countermeasure:** Never allow unvalidated objects through parsing gates. Implement strict object properties or configure input records to allow only plain string/primitive properties: `z.record(z.string(), z.string().regex(/^[\w\-]+$/))`.
 
+
 ---
 
 <br>
 
-#  Section 5: Enterprise Fault Interception (RFC 7807 Standardization)
+# Section 5. Content Negotiation
+
+### The Core Philosophy
+
+Content Negotiation is the mechanism defined by the HTTP specification ($RFC\ 9110$) that allows a client and a server to agree on the exact representation format of a resource. Clients do not just request a URL; they specify capabilities and preferences using standard headers. The server inspects these headers to dynamically determine whether to return JSON, XML, or binary data, or to reject the request with a $416\ Not\ Acceptable$ or $415\ Unsupported\ Media\ Type$ response.
+
+### Architectural Mechanics & Headers
+
+* `Accept`: Sent by the client to declare acceptable media types (e.g., `application/json`, `application/xml`).
+* `Accept-Encoding`: Declares compression algorithms the client understands (e.g., `gzip`, `br` for Brotli).
+* `Vary`: A critical response header sent by the server to inform downstream caching proxies (like CDNs) that the response was altered based on the incoming request headers. For instance, `Vary: Accept, Accept-Encoding` ensures a CDN does not serve a cached XML payload to a client requesting JSON.
+
+### Short Code Snippet: In-Route Content Selection
+
+```javascript
+// Express route enforcing strict negotiation boundaries
+app.get('/api/v1/reports/:id', (req, res, next) => {
+  // Leverages Express built-in format negotiator
+  res.format({
+    'application/json': () => {
+      res.json({ data: "Structured telemetry metrics" });
+    },
+    'text/csv': () => {
+      res.send("id,metrics\n1,Structured telemetry metrics");
+    },
+    'default': () => {
+      res.status(406).json({ error: "Not Acceptable: Supported formats are JSON or CSV" });
+    }
+  });
+});
+
+```
+
+### Production Pitfall & Defensive Countermeasure
+
+* **The Pitfall (Cache Poisoning):** Forgetting to send the `Vary` header when serving multiple representations from the same URL. If the first client requests a resource via XML, a poorly configured edge proxy might cache that XML payload and serve it to a subsequent client explicitly requesting JSON, crashing the frontend parser.
+* **The Countermeasure:** Always ensure your serialization presenters or gateway layers append `res.setHeader('Vary', 'Accept')` whenever route execution logic switches output based on incoming accept headers.
+
+---
+
+<br>
+
+# Section 6. API Versioning Strategies
+
+### The Core Philosophy
+
+API Versioning is the management lifecycle strategy that governs how breaking changes (e.g., dropping fields, altering types, changing structural behaviors) are introduced without disrupting existing API consumers. An enterprise versioning model must balances client friction against backend code maintainability.
+
+### Strategic Paradigms & Trade-Off Matrix
+
+#### Strategy A: URI Path Versioning (`/api/v1/resources`)
+
+* **The Approach:** The version identifier is hardcoded directly into the URL schema.
+* **The Good:** Highly visible, easy to debug in browser environments, and natively cached out of the box by any proxy network.
+* **The Bad:** Implies a total system update. Changing a single property in one entity forces you to increment the version across the entire routing tree, leading to code duplication.
+
+#### Strategy B: Media Type / Accept Header Versioning (`Accept: application/vnd.company.v2+json`)
+
+* **The Approach:** The URL remains invariant (`/api/resources`), but the client requests a specific data structure version via the `Accept` header.
+* **The Good:** Highly granular. Permits versioning a single resource representation independently while keeping the broader API namespace unified.
+* **The Bad:** Significantly complicates edge caching proxies, which must now cache by variation hash (`Vary`). Breaks standard browser URL shareability.
+
+### Short Code Snippet: Dynamic Header Router Polymorphism
+
+```javascript
+// Polymorphic routing middleware switching execution contexts by header
+const routeByVersion = (versionMap) => {
+  return (req, res, next) => {
+    const accept = req.headers['accept'] || '';
+    const match = accept.match(/vnd\.company\.v(\d+)\+json/);
+    const targetVersion = match ? `v${match[1]}` : 'v1'; // Default fallback
+
+    const controller = versionMap[targetVersion];
+    if (!controller) return res.status(406).json({ error: "Version unsupported" });
+    
+    return controller(req, res, next);
+  };
+};
+
+// Route binding
+app.get('/api/users', routeByVersion({
+  v1: (req, res) => res.json({ name: req.user.fullName }),
+  v2: (req, res) => res.json({ firstName: req.user.first, lastName: req.user.last })
+}));
+
+```
+
+---
+
+<br>
+
+#  Section 7: Enterprise Fault Interception
+
+### (RFC 7807 Standardization)
 
 Centralized error handling separates error catching from main execution threads using a dedicated Express four-argument signature middleware: `(err, req, res, next)`. Instead of managing error serialization inside individual controllers, exceptions are allowed to bubble up naturally. The central handler intercepts the error, securely logs trace diagnostics, and translates structural signatures into normalized public schemas following the RFC 7807 standard.
 
@@ -693,7 +787,7 @@ export const globalErrorHandler = (
 
 <br>
 
-#  Section 6: Architectural Routing & Ingestion Scaling
+#  Section 8: Architectural Routing & Ingestion Scaling
 
 Enterprise routing management partitions routing graphs to prevent middleware leaking while keeping code maintainable. When processing large data payloads ($>100\text{MB}$ metrics logs or file uploads), standard ingestion body-parsers cause high heap allocations, crashing the single-threaded runtime. Resolving this requires routing isolation alongside reactive chunked stream parsers.
 
@@ -712,7 +806,7 @@ If a client uploads a 200MB metrics payload, Node allocates 200MB of RAM to hold
 
 ### The Global Middleware Trap
 
-A common architectural flaw is mounting heavy middleware globally (e.g., `app.use(express.json())` at the top of the application tree). This forces every single incoming request—even simple `GET` health checks or webhooks—to pass through memory-allocation boundaries.
+A common architectural flaw is mounting heavy middleware globally (e.g., `app.use(express.json())` at the top of the application tree). This forces every single incoming request-even simple `GET` health checks or webhooks-to pass through memory-allocation boundaries.
 
 ### The "Traffic Lane" Architecture
 
@@ -838,7 +932,7 @@ export { dataIngestionRouter };
 
 ---
 
-#  Section 7: Self-Assessment & Synthesis Matrix
+#  Section 9: Self-Assessment & Synthesis Matrix
 
 Review these structural challenges to verify your understanding of enterprise architecture concepts.
 
